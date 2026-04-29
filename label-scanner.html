@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Label Scanner</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="zxing_reader.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap');
   :root {
@@ -19,9 +20,9 @@
   header span{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace}
   .main{flex:1;display:flex;flex-direction:column;padding:16px;gap:14px}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-  .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-  .card-header span{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s}
+  .card-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .card-hdr span{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s;flex-shrink:0}
   .dot.on{background:var(--success);box-shadow:0 0 8px var(--success)}
   .dot.blink{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 1s infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
@@ -36,14 +37,13 @@
   .frame::after{top:0;right:0;border-width:3px 3px 0 0}
   .frame span::before{bottom:0;left:0;border-width:0 0 3px 3px}
   .frame span::after{bottom:0;right:0;border-width:0 3px 3px 0}
-  .scanline{position:absolute;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sl 2s ease-in-out infinite;top:10px}
+  .scanline{position:absolute;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sl 2s ease-in-out infinite}
   @keyframes sl{0%{top:10px;opacity:1}90%{top:calc(100% - 12px);opacity:1}100%{top:calc(100% - 12px);opacity:0}}
   .scan-msg{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.65);padding:8px 16px;font-size:12px;font-family:'DM Mono',monospace;color:rgba(255,255,255,.75);text-align:center}
   .actions{padding:12px 16px;display:flex;gap:10px}
-  .lib-info{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);padding:6px 16px 0}
+  .lib-info{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);padding:6px 16px 4px}
   .btn{flex:1;padding:12px;border-radius:8px;border:none;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
-  .btn-p{background:var(--accent);color:#0f0f0f}
-  .btn-p:active{transform:scale(.97)}
+  .btn-p{background:var(--accent);color:#0f0f0f}.btn-p:active{transform:scale(.97)}
   .btn-s{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
   .btn-d{background:transparent;color:var(--danger);border:1px solid var(--danger)}
   .manual{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:none;flex-direction:column;gap:10px}
@@ -51,8 +51,7 @@
   .lbl{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
   input[type=text],input[type=number]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:16px;outline:none;transition:border-color .2s}
   input:focus{border-color:var(--accent)}
-  .row{display:flex;gap:10px}
-  .row>div{flex:1}
+  .frow{display:flex;gap:10px}.frow>div{flex:1}
   .sheet-wrap{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:flex-end;z-index:100}
   .sheet-wrap.on{display:flex}
   .sheet{width:100%;background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px 44px;border-top:1px solid var(--border);animation:su .25s ease}
@@ -97,9 +96,8 @@
 
 <div class="main">
 
-  <!-- Scanner -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-hdr">
       <span>Camera Scanner</span>
       <div class="dot" id="dot"></div>
     </div>
@@ -107,22 +105,21 @@
       <video id="video" playsinline autoplay muted></video>
       <canvas id="cv"></canvas>
       <div class="overlay"><div class="frame"><span></span><div class="scanline"></div></div></div>
-      <div class="scan-msg" id="smsg">Initialising…</div>
+      <div class="scan-msg" id="smsg">Ready</div>
     </div>
-    <div class="lib-info" id="libinfo">Loading DataMatrix decoder…</div>
+    <div class="lib-info" id="libinfo">Initialising DataMatrix decoder…</div>
     <div class="actions">
       <button class="btn btn-p" id="scanbtn" onclick="toggleScanner()">📷 Start Scanning</button>
       <button class="btn btn-s" onclick="toggleManual()">Manual</button>
     </div>
   </div>
 
-  <!-- Manual -->
   <div class="manual" id="manual">
     <div>
       <div class="lbl">Paste raw barcode — or fill fields below</div>
       <input type="text" id="mraw" placeholder="010735003445504210TO-03750920423740918581-43" oninput="parseRaw()">
     </div>
-    <div class="row">
+    <div class="frow">
       <div><div class="lbl">Artikel Number</div><input type="text" id="mart" placeholder="8581-43"></div>
       <div><div class="lbl">Size EUR</div><input type="text" id="msz" placeholder="43"></div>
     </div>
@@ -131,7 +128,6 @@
     <button class="btn btn-p" onclick="addManual()">＋ Add Item</button>
   </div>
 
-  <!-- List -->
   <div class="list-wrap">
     <div class="list-hdr">
       <div class="list-hdr-l">
@@ -151,8 +147,7 @@
 
 </div>
 
-<!-- Qty sheet -->
-<div class="sheet-wrap" id="sheet-wrap">
+<div class="sheet-wrap" id="sw">
   <div class="sheet">
     <div class="handle"></div>
     <div class="sh-art" id="sh-art">—</div>
@@ -171,33 +166,34 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="module">
-// ── Decoder setup ──────────────────────────────────────────────
-let readBarcodes = null;
+<script>
+// ── Wait for ZXingWASM to load ─────────────────────────────────
+let zxingReady = false;
 
-async function initDecoder() {
+window.addEventListener('load', async () => {
   const info = document.getElementById('libinfo');
-  // Try zxing-wasm — best DataMatrix support
-  const cdns = [
-    'https://cdn.jsdelivr.net/npm/zxing-wasm@1.2.9/dist/reader/zxing_reader.js',
-    'https://unpkg.com/zxing-wasm@1.2.9/dist/reader/zxing_reader.js',
-  ];
-  for (const url of cdns) {
-    try {
-      const mod = await import(url);
-      readBarcodes = mod.readBarcodes || mod.default?.readBarcodes;
-      if (readBarcodes) {
-        // Warm up the wasm
-        await readBarcodes(new Blob([]), { formats: ['DataMatrix'] }).catch(()=>{});
-        info.textContent = '✓ DataMatrix decoder ready';
-        info.style.color = 'var(--success)';
-        return;
+  try {
+    // ZXingWASM is loaded as IIFE, exposes ZXingWASM global
+    // Override the locateFile so it finds the wasm next to this HTML
+    ZXingWASM.setZXingModuleOverrides({
+      locateFile: (path, prefix) => {
+        if (path.endsWith('.wasm')) return 'zxing_reader.wasm';
+        return prefix + path;
       }
-    } catch(e) { /* try next */ }
+    });
+    // Warm up by reading a dummy blob
+    await ZXingWASM.readBarcodesFromImageFile(
+      new Blob([new Uint8Array([0])], {type:'image/png'}),
+      { formats: ['DataMatrix'] }
+    ).catch(() => {});
+    zxingReady = true;
+    info.textContent = '✓ DataMatrix decoder ready';
+    info.style.color = 'var(--success)';
+  } catch(e) {
+    info.textContent = '⚠ Decoder error: ' + e.message + ' — use Manual Entry';
+    info.style.color = 'var(--danger)';
   }
-  info.textContent = '⚠ Decoder unavailable — use Manual Entry or paste raw barcode';
-  info.style.color = 'var(--danger)';
-}
+});
 
 // ── GS1 Parser ─────────────────────────────────────────────────
 function parseGS1(raw) {
@@ -205,19 +201,12 @@ function parseGS1(raw) {
   if (!raw) return r;
   const s = raw.replace(/[\x1D\x1E\x04\x1C]/g, '');
 
-  // AI 21 — serial number at end
-  const m21 = s.match(/21([A-Za-z0-9\-\/]+?)(?=\d{2}[A-Z]|$)/i);
+  // AI 21 at end of string (serial number)
+  const m21 = s.match(/21([A-Za-z0-9\-\/]+)$/);
   if (m21) r.artikel = m21[1];
 
-  // If still nothing, last hyphenated token
-  if (!r.artikel) {
-    const tokens = s.split(/(?=\d{2}[A-Z0-9])/);
-    const last = tokens[tokens.length - 1];
-    if (/^[A-Z0-9]{3,}[-\/]\w+$/i.test(last)) r.artikel = last;
-  }
-
-  // Direct artikel (no GS1 wrapping)
-  if (!r.artikel && /^[A-Z0-9S]{4,}[-\/]\d+/i.test(raw.trim())) {
+  // Fallback: looks like a plain artikel number
+  if (!r.artikel && /^[A-Z0-9S]{3,}[-\/]\w+$/i.test(raw.trim())) {
     r.artikel = raw.trim();
   }
 
@@ -249,79 +238,88 @@ function lookupProduct(a) {
   return null;
 }
 
-// ── Camera + decode loop ───────────────────────────────────────
+// ── Camera ─────────────────────────────────────────────────────
 let scanning = false, loopTimer = null, camStream = null;
 
-async function toggleScanner() {
-  scanning ? stopCam() : await startCam();
+function toggleScanner() {
+  scanning ? stopCam() : startCam();
 }
 
 async function startCam() {
   try {
     camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} }
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
     });
     const video = document.getElementById('video');
     video.srcObject = camStream;
     await video.play();
     document.getElementById('vc').classList.add('on');
     scanning = true;
-    document.getElementById('scanbtn').textContent = '⏹ Stop';
-    document.getElementById('scanbtn').style.cssText = 'background:#ff4747;color:#fff;flex:1;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;padding:12px;';
+    const btn = document.getElementById('scanbtn');
+    btn.textContent = '⏹ Stop';
+    btn.style.cssText = 'background:#ff4747;color:#fff;flex:1;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;padding:12px;';
     document.getElementById('dot').className = 'dot blink';
-    document.getElementById('smsg').textContent = 'Point at DataMatrix label…';
+    document.getElementById('smsg').textContent = zxingReady
+      ? 'Point label at camera…'
+      : 'Decoder loading, please wait…';
     loop();
   } catch(e) {
-    toast('Camera: ' + e.message, true);
+    toast('Camera error: ' + e.message, true);
   }
 }
 
 function stopCam() {
   scanning = false;
   clearTimeout(loopTimer);
-  if (camStream) { camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   const v = document.getElementById('video');
   v.srcObject = null;
   document.getElementById('vc').classList.remove('on');
-  document.getElementById('scanbtn').textContent = '📷 Start Scanning';
-  document.getElementById('scanbtn').style.cssText = '';
+  const btn = document.getElementById('scanbtn');
+  btn.textContent = '📷 Start Scanning';
+  btn.style.cssText = '';
   document.getElementById('dot').className = 'dot';
 }
 
 async function loop() {
   if (!scanning) return;
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('cv');
-  const ctx = canvas.getContext('2d', { willReadFrequently:true });
 
-  if (video.readyState >= 2 && readBarcodes) {
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+  if (zxingReady) {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('cv');
 
-    try {
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-      const results = await readBarcodes(blob, {
-        formats: ['DataMatrix','QRCode','Code128','EAN13'],
-        tryHarder: true,
-      });
-      if (results && results.length > 0 && results[0].text) {
-        onScan(results[0].text);
-        return;
-      }
-    } catch(e) { /* keep looping */ }
+    if (video.readyState >= 2) {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0);
+
+      try {
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+        const results = await ZXingWASM.readBarcodesFromImageFile(blob, {
+          formats: ['DataMatrix', 'QRCode', 'Code128', 'EAN13'],
+          tryHarder: true,
+          tryRotate: true,
+          tryInvert: true,
+        });
+        if (results && results.length > 0 && results[0].text) {
+          onScan(results[0].text);
+          return;
+        }
+      } catch(e) { /* keep looping */ }
+    }
   }
 
   loopTimer = setTimeout(loop, 200);
 }
 
-let lastRaw='', lastT=0;
+let lastRaw = '', lastT = 0;
 function onScan(raw) {
-  if (raw === lastRaw && Date.now()-lastT < 3000) return;
-  lastRaw=raw; lastT=Date.now();
+  if (raw === lastRaw && Date.now() - lastT < 3000) return;
+  lastRaw = raw; lastT = Date.now();
   stopCam();
   const p = parseGS1(raw);
-  if (!p.artikel) { toast('Scanned but could not parse artikel', true); return; }
+  if (!p.artikel) { toast('Scanned but could not read artikel number', true); return; }
   showSheet(p);
 }
 
@@ -332,36 +330,38 @@ function showSheet(p) {
   pending = p;
   document.getElementById('sh-art').textContent = p.artikel;
   document.getElementById('sh-prod').textContent =
-    [p.product, p.size ? 'EUR '+p.size : null].filter(Boolean).join(' · ') || '—';
+    [p.product, p.size ? 'EUR ' + p.size : null].filter(Boolean).join(' · ') || '—';
   document.getElementById('qi').value = 1;
-  document.getElementById('sheet-wrap').classList.add('on');
-  setTimeout(()=>document.getElementById('qi').select(), 300);
+  document.getElementById('sw').classList.add('on');
+  setTimeout(() => document.getElementById('qi').select(), 300);
 }
 
 function adj(d) {
   const i = document.getElementById('qi');
-  i.value = Math.max(1, (parseInt(i.value)||1)+d);
+  i.value = Math.max(1, (parseInt(i.value) || 1) + d);
 }
 
 function confirmQty() {
   if (!pending) return;
-  addItem({ ...pending, qty: parseInt(document.getElementById('qi').value)||1 });
-  pending=null;
-  document.getElementById('sheet-wrap').classList.remove('on');
+  addItem({ ...pending, qty: parseInt(document.getElementById('qi').value) || 1 });
+  pending = null;
+  document.getElementById('sw').classList.remove('on');
   toast('✓ Added');
 }
 
 function cancelQty() {
-  pending=null;
-  document.getElementById('sheet-wrap').classList.remove('on');
+  pending = null;
+  document.getElementById('sw').classList.remove('on');
 }
 
-document.getElementById('sheet-wrap').addEventListener('click', e => {
-  if (e.target === document.getElementById('sheet-wrap')) cancelQty();
+document.getElementById('sw').addEventListener('click', e => {
+  if (e.target === document.getElementById('sw')) cancelQty();
 });
 
 // ── Manual entry ───────────────────────────────────────────────
-function toggleManual() { document.getElementById('manual').classList.toggle('on'); }
+function toggleManual() {
+  document.getElementById('manual').classList.toggle('on');
+}
 
 function parseRaw() {
   const raw = document.getElementById('mraw').value.trim();
@@ -369,7 +369,7 @@ function parseRaw() {
   const p = parseGS1(raw);
   if (p.artikel) document.getElementById('mart').value = p.artikel;
   if (p.size)    document.getElementById('msz').value  = p.size;
-  if (p.product) document.getElementById('mprod').value= p.product;
+  if (p.product) document.getElementById('mprod').value = p.product;
 }
 
 function addManual() {
@@ -377,43 +377,43 @@ function addManual() {
   if (!art) { toast('Artikel number required', true); return; }
   addItem({
     artikel: art,
-    qty:     parseInt(document.getElementById('mqty').value)||1,
+    qty:     parseInt(document.getElementById('mqty').value) || 1,
     size:    document.getElementById('msz').value.trim() || inferSize(art),
     product: document.getElementById('mprod').value.trim() || lookupProduct(art),
   });
-  ['mraw','mart','msz','mprod','mqty'].forEach(id => document.getElementById(id).value='');
+  ['mraw','mart','msz','mprod','mqty'].forEach(id => document.getElementById(id).value = '');
   toast('✓ Added');
 }
 
-// ── Items ──────────────────────────────────────────────────────
+// ── Items list ─────────────────────────────────────────────────
 const items = [];
 
 function addItem(item) { items.unshift(item); render(); }
 
-function delItem(i) { items.splice(i,1); render(); }
+function delItem(i) { items.splice(i, 1); render(); }
 
 function clearAll() {
   if (!items.length) return;
-  if (confirm('Clear all '+items.length+' items?')) { items.length=0; render(); }
+  if (confirm('Clear all ' + items.length + ' items?')) { items.length = 0; render(); }
 }
 
 function render() {
-  const list = document.getElementById('ilist');
+  const list  = document.getElementById('ilist');
   document.getElementById('badge').textContent = items.length;
-  document.getElementById('hcount').textContent = items.length+' item'+(items.length!==1?'s':'');
+  document.getElementById('hcount').textContent = items.length + ' item' + (items.length !== 1 ? 's' : '');
   if (!items.length) {
-    list.innerHTML='';
+    list.innerHTML = '';
     list.appendChild(document.getElementById('empty'));
     return;
   }
-  list.innerHTML = items.map((it,i)=>`
+  list.innerHTML = items.map((it, i) => `
     <div class="irow">
-      <div class="inum">${items.length-i}</div>
+      <div class="inum">${items.length - i}</div>
       <div class="iinfo">
         <div class="iart">${it.artikel}</div>
-        <div class="iprod">${it.product||'—'}</div>
+        <div class="iprod">${it.product || '—'}</div>
       </div>
-      <div class="isz">${it.size?'EU&nbsp;'+it.size:''}</div>
+      <div class="isz">${it.size ? 'EU&nbsp;' + it.size : ''}</div>
       <div class="iqty">${it.qty}</div>
       <button class="idel" onclick="delItem(${i})">✕</button>
     </div>
@@ -422,43 +422,44 @@ function render() {
 
 // ── Export ─────────────────────────────────────────────────────
 function exportCSV() {
-  if (!items.length) { toast('Nothing to export',true); return; }
-  const rows=['Artikel Number,Size (EUR),Product Name,Quantity',
-    ...items.map(i=>`"${i.artikel}","${i.size||''}","${i.product||''}","${i.qty}"`)].join('\n');
-  dl(new Blob([rows],{type:'text/csv'}), 'inventory_'+ds()+'.csv');
+  if (!items.length) { toast('Nothing to export', true); return; }
+  const rows = [
+    'Artikel Number,Size (EUR),Product Name,Quantity',
+    ...items.map(i => `"${i.artikel}","${i.size||''}","${i.product||''}","${i.qty}"`)
+  ].join('\n');
+  dl(new Blob([rows], { type: 'text/csv' }), 'inventory_' + ds() + '.csv');
   toast('CSV saved');
 }
 
 function exportXLSX() {
-  if (!items.length) { toast('Nothing to export',true); return; }
-  const ws=XLSX.utils.aoa_to_sheet([
-    ['Artikel Number','Size (EUR)','Product Name','Quantity'],
-    ...items.map(i=>[i.artikel,i.size||'',i.product||'',i.qty])
+  if (!items.length) { toast('Nothing to export', true); return; }
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Artikel Number', 'Size (EUR)', 'Product Name', 'Quantity'],
+    ...items.map(i => [i.artikel, i.size || '', i.product || '', i.qty])
   ]);
-  ws['!cols']=[{wch:18},{wch:12},{wch:28},{wch:12}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Inventory');
-  XLSX.writeFile(wb,'inventory_'+ds()+'.xlsx');
+  ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+  XLSX.writeFile(wb, 'inventory_' + ds() + '.xlsx');
   toast('Excel saved');
 }
 
-function dl(blob,name){ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click(); }
-function ds(){ return new Date().toISOString().slice(0,10).replace(/-/g,''); }
-
-// ── Toast ──────────────────────────────────────────────────────
-function toast(msg,err) {
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.style.background=err?'var(--danger)':'var(--success)';
-  t.style.color=err?'#fff':'#0f0f0f';
-  t.classList.add('on');
-  setTimeout(()=>t.classList.remove('on'),2500);
+function dl(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
 }
+function ds() { return new Date().toISOString().slice(0, 10).replace(/-/g, ''); }
 
-// Expose to onclick handlers
-Object.assign(window,{toggleScanner,toggleManual,parseRaw,addManual,delItem,clearAll,exportCSV,exportXLSX,adj,confirmQty,cancelQty});
-
-initDecoder();
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = err ? 'var(--danger)' : 'var(--success)';
+  t.style.color = err ? '#fff' : '#0f0f0f';
+  t.classList.add('on');
+  setTimeout(() => t.classList.remove('on'), 2500);
+}
 </script>
 </body>
 </html>
