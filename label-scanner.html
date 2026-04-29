@@ -77,6 +77,8 @@
   .inum{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);width:20px;flex-shrink:0}
   .iinfo{flex:1;min-width:0}
   .iart{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--accent2)}
+  .iart-input{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--accent2);background:transparent;border:none;border-bottom:1px dashed transparent;outline:none;width:100%;padding:0;transition:border-color .2s}
+  .iart-input:focus{border-bottom-color:var(--accent);background:rgba(255,255,255,.04);border-radius:3px 3px 0 0}
   .iprod{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .isz{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);flex-shrink:0}
   .iqty{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--text);min-width:36px;text-align:right;flex-shrink:0}
@@ -384,6 +386,12 @@ function parseRaw() {
   if (p.product) document.getElementById('mprod').value = p.product;
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('mqty').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addManual(); }
+  });
+});
+
 function addManual() {
   const art = document.getElementById('mart').value.trim();
   if (!art) { toast('Artikel number required', true); return; }
@@ -404,6 +412,15 @@ function addItem(item) { items.unshift(item); render(); }
 
 function delItem(i) { items.splice(i, 1); render(); }
 
+function editArtikel(i, val) {
+  val = val.trim();
+  if (!val || val === items[i].artikel) return;
+  items[i].artikel = val;
+  items[i].size    = inferSize(val);
+  items[i].product = lookupProduct(val) || items[i].product;
+  render();
+}
+
 function clearAll() {
   if (!items.length) return;
   if (confirm('Clear all ' + items.length + ' items?')) { items.length = 0; render(); }
@@ -422,7 +439,9 @@ function render() {
     <div class="irow">
       <div class="inum">${items.length - i}</div>
       <div class="iinfo">
-        <div class="iart">${it.artikel}</div>
+        <input class="iart-input" value="${it.artikel}"
+          onchange="editArtikel(${i}, this.value)"
+          onblur="editArtikel(${i}, this.value)">
         <div class="iprod">${it.product || '—'}</div>
       </div>
       <div class="isz">${it.size ? 'EU&nbsp;' + it.size : ''}</div>
