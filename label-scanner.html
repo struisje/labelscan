@@ -201,13 +201,25 @@ function parseGS1(raw) {
   if (!raw) return r;
   const s = raw.replace(/[\x1D\x1E\x04\x1C]/g, '');
 
-  // AI 21 at end of string (serial number)
-  const m21 = s.match(/21([A-Za-z0-9\-\/]+)$/);
-  if (m21) r.artikel = m21[1];
+  // AI 91 — Polyver company-internal field (contains artikel number)
+  const m91 = s.match(/91([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
+  if (m91) r.artikel = m91[1];
 
-  // Fallback: looks like a plain artikel number
-  if (!r.artikel && /^[A-Z0-9S]{3,}[-\/]\w+$/i.test(raw.trim())) {
-    r.artikel = raw.trim();
+  // AI 21 — serial number fallback
+  if (!r.artikel) {
+    const m21 = s.match(/21([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
+    if (m21) r.artikel = m21[1];
+  }
+
+  // Last token that looks like an artikel-size pair
+  if (!r.artikel) {
+    const mLast = s.match(/([A-Z0-9S]{3,}[\-\/]\d{2,5}[FfNn]?)$/i);
+    if (mLast) r.artikel = mLast[1];
+  }
+
+  // Plain artikel number (no GS1 wrapping)
+  if (!r.artikel && /^[A-Z0-9S]{3,}[\-\/]\w+$/i.test(s)) {
+    r.artikel = s;
   }
 
   if (r.artikel) {
