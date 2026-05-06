@@ -722,9 +722,15 @@ window.addEventListener('load', async () => {
 
 // ── GS1 Parser ─────────────────────────────────────────────────
 function parseGS1(raw) {
-  const r = { raw, artikel: null, size: null, product: null };
+  const r = { raw, artikel: null, size: null, product: null, containerQty: null };
   if (!raw) return r;
   const s = raw.replace(/[\x1D\x1E\x04\x1C]/g, '');
+
+  // Container qty — Polyver encodes it as the last 2 digits of the AI 09
+  // internal block, which sits between "09" and "91" in the barcode string.
+  // e.g. "09[20423740]91" → last 2 digits = 40 pairs per container.
+  const m09 = s.match(/09(\d{4,12})91/);
+  if (m09) r.containerQty = parseInt(m09[1].slice(-2));
 
   // AI 91 — Polyver company-internal field (contains artikel number)
   const m91 = s.match(/91([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
@@ -868,7 +874,12 @@ function showSheet(p) {
   document.getElementById('sh-art').textContent = p.artikel;
   document.getElementById('sh-prod').textContent =
     [p.product, p.size ? 'EUR ' + p.size : null].filter(Boolean).join(' · ') || '—';
-  document.getElementById('qi').value = 1;
+  // Pre-fill with container quantity from AI 37 if available, else default to 1
+  document.getElementById('qi').value = p.containerQty || 1;
+  // Update label to show source of quantity
+  document.getElementById('qty-label').textContent = p.containerQty
+    ? 'Number of pairs (from barcode)'
+    : 'Number of pairs';
   document.getElementById('sw').classList.add('on');
   setTimeout(() => document.getElementById('qi').select(), 300);
 }
