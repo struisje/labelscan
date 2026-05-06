@@ -726,31 +726,33 @@ function parseGS1(raw) {
   if (!raw) return r;
   const s = raw.replace(/[\x1D\x1E\x04\x1C]/g, '');
 
-  // Container qty — Polyver encodes it as the last 2 digits of the AI 09
-  // internal block, which sits between "09" and "91" in the barcode string.
-  // e.g. "09[20423740]91" → last 2 digits = 40 pairs per container.
-  const m09 = s.match(/09(\d{4,12})91/);
-  if (m09) r.containerQty = parseInt(m09[1].slice(-2));
+  // Polyver GS1 DataMatrix structure (confirmed across 5 samples):
+  //   01 [14-digit GTIN]
+  //   10 [lot: always "TO-" + 4 digits = 7 chars]
+  //   [variable digit block]
+  //   91 [artikel number to end of string]
+  //
+  // Container qty = last 2 digits of the block before "91"
+  // Artikel       = everything after "91"
 
-  // AI 91 — Polyver company-internal field (contains artikel number)
-  const m91 = s.match(/91([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
-  if (m91) r.artikel = m91[1];
+  // Skip AI01 + GTIN (16 chars) before searching for AI91,
+  // because the GTIN itself can contain the digits "91".
+  const searchFrom = s.startsWith('01') ? 16 : 0;
+  const ai91 = s.indexOf('91', searchFrom);
 
-  // AI 21 — serial number fallback
-  if (!r.artikel) {
-    const m21 = s.match(/21([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
-    if (m21) r.artikel = m21[1];
+  if (ai91 > 0) {
+    // Artikel: everything after "91"
+    r.artikel = s.slice(ai91 + 2);
+
+    // Container qty: last 2 digits of the block before "91"
+    const before91 = s.slice(searchFrom, ai91);
+    const digits = before91.match(/(\d+)$/);
+    if (digits) r.containerQty = parseInt(digits[1].slice(-2));
   }
 
-  // Last token that looks like an artikel-size pair
+  // Fallback: plain artikel number (no GS1 wrapping), e.g. "8581-43"
   if (!r.artikel) {
-    const mLast = s.match(/([A-Z0-9S]{3,}[\-\/]\d{2,5}[FfNn]?)$/i);
-    if (mLast) r.artikel = mLast[1];
-  }
-
-  // Plain artikel number (no GS1 wrapping)
-  if (!r.artikel && /^[A-Z0-9S]{3,}[\-\/]\w+$/i.test(s)) {
-    r.artikel = s;
+    if (/^[A-Z0-9S]{3,}[\-\/]\w+$/i.test(s)) r.artikel = s;
   }
 
   if (r.artikel) {
