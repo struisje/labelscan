@@ -735,19 +735,17 @@ function parseGS1(raw) {
   // Container qty = last 2 digits of the block before "91"
   // Artikel       = everything after "91"
 
-  // Skip AI01 + GTIN (16 chars) before searching for AI91,
-  // because the GTIN itself can contain the digits "91".
+  // Skip AI01 + GTIN (16 chars) before searching, as GTIN can contain "91".
   const searchFrom = s.startsWith('01') ? 16 : 0;
-  const ai91 = s.indexOf('91', searchFrom);
+  const afterGTIN  = s.slice(searchFrom);
 
-  if (ai91 > 0) {
-    // Artikel: everything after "91"
-    r.artikel = s.slice(ai91 + 2);
-
-    // Container qty: last 2 digits of the block before "91"
-    const before91 = s.slice(searchFrom, ai91);
-    const digits = before91.match(/(\d+)$/);
-    if (digits) r.containerQty = parseInt(digits[1].slice(-2));
+  // Qty and artikel come from the same pattern:
+  //   "237" (AI20=2 + AI37) + qty digits (1-2) + "91" (AI91) + artikel
+  // Using a single regex anchors both extractions to the correct "91".
+  const mCore = afterGTIN.match(/237(\d{1,2})91([A-Za-z0-9][A-Za-z0-9\-\/]*)/);
+  if (mCore) {
+    r.containerQty = parseInt(mCore[1]);
+    r.artikel      = mCore[2];
   }
 
   // Fallback: plain artikel number (no GS1 wrapping), e.g. "8581-43"
