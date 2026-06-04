@@ -558,11 +558,18 @@ function exportXLSX() {
   const all = getAllItems();
   if (!all.length) { toast('Nothing to export', true); return; }
 
+  const palletRows = [];
+  confirmedContainers.forEach((c, ci) => {
+    c.items.forEach(i => palletRows.push([ci + 1, i.artikel, i.size || '', i.product || '', i.qty]));
+  });
+  const pendingNum = confirmedContainers.length + 1;
+  pendingItems.forEach(i => palletRows.push([pendingNum, i.artikel, i.size || '', i.product || '', i.qty]));
+
   const ws1 = XLSX.utils.aoa_to_sheet([
-    ['Artikel Number', 'Size (EUR)', 'Product Name', 'Quantity'],
-    ...all.map(i => [i.artikel, i.size || '', i.product || '', i.qty])
+    ['Container', 'Artikel Number', 'Size (EUR)', 'Product Name', 'Quantity'],
+    ...palletRows
   ]);
-  ws1['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+  ws1['!cols'] = [{ wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
 
   const totalsMap = {};
   all.forEach(i => {
