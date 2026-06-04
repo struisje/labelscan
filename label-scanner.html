@@ -58,6 +58,14 @@
     <button class="btn btn-p" onclick="addManual()">＋ Add Item</button>
   </div>
 
+  <div class="tally-strip tally-idle" id="tally">
+    <div class="tally-info">
+      <div class="tally-label">Current container</div>
+      <div class="tally-total" id="tally-total">—</div>
+    </div>
+    <button class="btn btn-s" id="tallyBtn" style="flex:0;padding:8px 14px;font-size:12px" onclick="onTallyBtn()" disabled>New Container ↵</button>
+  </div>
+
   <div class="list-wrap">
     <div class="list-hdr">
       <div class="list-hdr-l">
@@ -350,6 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mqty').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addManual(); }
   });
+  render();
 });
 
 function addManual() {
@@ -366,73 +375,197 @@ function addManual() {
 }
 
 // ── Items list ─────────────────────────────────────────────────
-const items = [];
+const VALID_SIZES = [31, 40, 48, 72];
+let pendingItems = [];
+const confirmedContainers = [];
+let nextId = 0;
 
-function addItem(item) { items.unshift(item); render(); }
+function getAllItems() {
+  return confirmedContainers.flatMap(c => c.items).concat(pendingItems);
+}
 
-function delItem(i) { items.splice(i, 1); render(); }
+function addItem(item) {
+  item.id = nextId++;
+  pendingItems.push(item);
+  render();
+}
 
-function editArtikel(i, val) {
+function delItem(id) {
+  const pi = pendingItems.findIndex(i => i.id === id);
+  if (pi !== -1) { pendingItems.splice(pi, 1); render(); return; }
+  for (let ci = 0; ci < confirmedContainers.length; ci++) {
+    const ii = confirmedContainers[ci].items.findIndex(i => i.id === id);
+    if (ii !== -1) {
+      confirmedContainers[ci].items.splice(ii, 1);
+      if (!confirmedContainers[ci].items.length) {
+        confirmedContainers.splice(ci, 1);
+      } else {
+        const t = confirmedContainers[ci].items.reduce((s,i) => s+i.qty, 0);
+        confirmedContainers[ci].total = t;
+        confirmedContainers[ci].valid = VALID_SIZES.includes(t);
+      }
+      render(); return;
+    }
+  }
+}
+
+function editArtikel(id, val) {
   val = val.trim();
-  if (!val || val === items[i].artikel) return;
-  items[i].artikel = val;
-  items[i].size    = inferSize(val);
-  items[i].product = lookupProduct(val) || items[i].product;
+  const item = getAllItems().find(i => i.id === id);
+  if (!item || !val || val === item.artikel) return;
+  item.artikel = val;
+  item.size    = inferSize(val);
+  item.product = lookupProduct(val) || item.product;
   render();
 }
 
 function clearAll() {
-  if (!items.length) return;
-  if (confirm('Clear all ' + items.length + ' items?')) { items.length = 0; render(); }
+  const count = getAllItems().length;
+  if (!count) return;
+  if (confirm('Clear all ' + count + ' items?')) {
+    pendingItems = [];
+    confirmedContainers.length = 0;
+    render();
+  }
+}
+
+function confirmContainer() {
+  if (!pendingItems.length) return;
+  const total = pendingItems.reduce((s,i) => s+i.qty, 0);
+  confirmedContainers.push({ items: [...pendingItems], total, valid: true });
+  pendingItems = [];
+  toast('Container ' + confirmedContainers.length + ': ' + total + ' pairs ✓');
+  render();
+}
+
+function forceNewContainer() {
+  if (!pendingItems.length) return;
+  const total = pendingItems.reduce((s,i) => s+i.qty, 0);
+  const valid = VALID_SIZES.includes(total);
+  confirmedContainers.push({ items: [...pendingItems], total, valid });
+  pendingItems = [];
+  toast('Container ' + confirmedContainers.length + ': ' + total + ' pairs' + (valid ? ' ✓' : ' ⚠'), !valid);
+  render();
+}
+
+function onTallyBtn() {
+  const total = pendingItems.reduce((s,i) => s+i.qty, 0);
+  VALID_SIZES.includes(total) ? confirmContainer() : forceNewContainer();
+}
+
+function getTallyStatus(total) {
+  if (total === 0) return 'idle';
+  if (VALID_SIZES.includes(total)) return 'ready';
+  if (total < 31) return 'building';
+  if (total > 72) return 'over';
+  return 'warning';
+}
+
+function updateTally() {
+  const total = pendingItems.reduce((s,i) => s+i.qty, 0);
+  const status = getTallyStatus(total);
+  document.getElementById('tally').className = 'tally-strip tally-' + status;
+  const el = document.getElementById('tally-total');
+  const next = VALID_SIZES.find(s => s > total);
+  if (total === 0) {
+    el.textContent = '—';
+  } else if (status === 'ready') {
+    el.textContent = total + ' — confirm?';
+  } else if (status === 'building') {
+    el.textContent = total + ' / ' + next;
+  } else if (status === 'warning') {
+    el.textContent = total + ' / ' + (next || '?') + ' ⚠';
+  } else if (status === 'over') {
+    el.textContent = total + ' — over limit';
+  }
+  const btn = document.getElementById('tallyBtn');
+  const isReady = status === 'ready';
+  btn.textContent = isReady ? 'Confirm ✓' : 'New Container ↵';
+  btn.className = 'btn ' + (isReady ? 'btn-p' : 'btn-s');
+  btn.disabled = !pendingItems.length;
 }
 
 function render() {
-  const list  = document.getElementById('ilist');
-  document.getElementById('badge').textContent = items.length;
-  document.getElementById('hcount').textContent = items.length + ' item' + (items.length !== 1 ? 's' : '');
-  if (!items.length) {
-    list.innerHTML = '';
-    list.appendChild(document.getElementById('empty'));
+  const allItems = getAllItems();
+  const count = allItems.length;
+  document.getElementById('badge').textContent = count;
+  document.getElementById('hcount').textContent = count + ' item' + (count !== 1 ? 's' : '');
+  updateTally();
+
+  const list = document.getElementById('ilist');
+  if (!count) {
+    list.innerHTML = '<div class="empty"><div>▣</div><p>No items yet</p><small>Scan a label or use Manual Entry</small></div>';
     return;
   }
-  list.innerHTML = items.map((it, i) => `
-    <div class="irow">
-      <div class="inum">${items.length - i}</div>
-      <div class="iinfo">
-        <input class="iart-input" value="${it.artikel}"
-          onchange="editArtikel(${i}, this.value)"
-          onblur="editArtikel(${i}, this.value)">
-        <div class="iprod">${it.product || '—'}</div>
-      </div>
-      <div class="isz">${it.size ? 'EU&nbsp;' + it.size : ''}</div>
-      <div class="iqty">${it.qty}</div>
-      <button class="idel" onclick="delItem(${i})">✕</button>
-    </div>
-  `).join('');
+
+  const groups = [];
+  if (pendingItems.length) {
+    const t = pendingItems.reduce((s,i) => s+i.qty, 0);
+    groups.push({ items: [...pendingItems].reverse(), total: t, confirmed: false, num: confirmedContainers.length + 1 });
+  }
+  for (let ci = confirmedContainers.length - 1; ci >= 0; ci--) {
+    const c = confirmedContainers[ci];
+    groups.push({ items: [...c.items].reverse(), total: c.total, valid: c.valid, confirmed: true, num: ci + 1 });
+  }
+
+  const showHeaders = groups.length > 1 || (groups.length === 1 && groups[0].confirmed);
+  let html = '';
+
+  for (const g of groups) {
+    if (showHeaders) {
+      let cls, icon, label;
+      if (!g.confirmed) {
+        const st = getTallyStatus(g.total);
+        cls = st === 'ready' ? 'valid' : st;
+        icon = st === 'ready' ? '✓ ' : st === 'warning' ? '⚠ ' : st === 'over' ? '✕ ' : '';
+        label = 'In progress';
+      } else {
+        cls = g.valid ? 'valid' : 'warning';
+        icon = g.valid ? '✓ ' : '⚠ ';
+        label = 'Container ' + g.num;
+      }
+      html += `<div class="container-hdr hdr-${cls}"><span>${label}</span><span>${icon}${g.total} pairs</span></div>`;
+    }
+    for (const it of g.items) {
+      html += `<div class="irow">
+        <div class="inum">${it.id + 1}</div>
+        <div class="iinfo">
+          <input class="iart-input" value="${it.artikel}" onchange="editArtikel(${it.id},this.value)" onblur="editArtikel(${it.id},this.value)">
+          <div class="iprod">${it.product || '—'}</div>
+        </div>
+        <div class="isz">${it.size ? 'EU&nbsp;'+it.size : ''}</div>
+        <div class="iqty">${it.qty}</div>
+        <button class="idel" onclick="delItem(${it.id})">✕</button>
+      </div>`;
+    }
+  }
+  list.innerHTML = html;
 }
 
 // ── Export ─────────────────────────────────────────────────────
 function exportCSV() {
-  if (!items.length) { toast('Nothing to export', true); return; }
+  const all = getAllItems();
+  if (!all.length) { toast('Nothing to export', true); return; }
   const rows = [
     'Artikel Number,Size (EUR),Product Name,Quantity',
-    ...items.map(i => `"${i.artikel}","${i.size||''}","${i.product||''}","${i.qty}"`)
+    ...all.map(i => `"${i.artikel}","${i.size||''}","${i.product||''}","${i.qty}"`)
   ].join('\n');
   dl(new Blob([rows], { type: 'text/csv' }), 'inventory_' + ds() + '.csv');
   toast('CSV saved');
 }
 
 function exportXLSX() {
-  if (!items.length) { toast('Nothing to export', true); return; }
+  const all = getAllItems();
+  if (!all.length) { toast('Nothing to export', true); return; }
 
   const ws1 = XLSX.utils.aoa_to_sheet([
     ['Artikel Number', 'Size (EUR)', 'Product Name', 'Quantity'],
-    ...items.map(i => [i.artikel, i.size || '', i.product || '', i.qty])
+    ...all.map(i => [i.artikel, i.size || '', i.product || '', i.qty])
   ]);
   ws1['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
 
   const totalsMap = {};
-  items.forEach(i => {
+  all.forEach(i => {
     const key = i.artikel;
     if (!totalsMap[key]) totalsMap[key] = { artikel: i.artikel, size: i.size || '', product: i.product || '', qty: 0 };
     totalsMap[key].qty += i.qty;
