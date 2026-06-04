@@ -683,8 +683,8 @@
       <div class="stepper" onclick="adj(1)">+</div>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn btn-s" onclick="cancelQty()">Cancel</button>
-      <button class="btn btn-p" onclick="confirmQty()">Add to List</button>
+      <button class="btn btn-s" style="padding:16px" onclick="cancelQty()">Cancel</button>
+      <button class="btn btn-p" id="confirm-btn" style="padding:16px" onclick="confirmQty()">Add to List</button>
     </div>
   </div>
 </div>
@@ -881,7 +881,7 @@ function showSheet(p) {
     ? 'Number of pairs (from barcode)'
     : 'Number of pairs';
   document.getElementById('sw').classList.add('on');
-  setTimeout(() => document.getElementById('qi').select(), 300);
+  setTimeout(() => document.getElementById('confirm-btn').focus(), 300);
 }
 
 function adj(d) {
@@ -998,13 +998,29 @@ function exportCSV() {
 
 function exportXLSX() {
   if (!items.length) { toast('Nothing to export', true); return; }
-  const ws = XLSX.utils.aoa_to_sheet([
+
+  const ws1 = XLSX.utils.aoa_to_sheet([
     ['Artikel Number', 'Size (EUR)', 'Product Name', 'Quantity'],
     ...items.map(i => [i.artikel, i.size || '', i.product || '', i.qty])
   ]);
-  ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+  ws1['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+
+  const totalsMap = {};
+  items.forEach(i => {
+    const key = i.artikel;
+    if (!totalsMap[key]) totalsMap[key] = { artikel: i.artikel, size: i.size || '', product: i.product || '', qty: 0 };
+    totalsMap[key].qty += i.qty;
+  });
+  const totals = Object.values(totalsMap).sort((a, b) => a.artikel.localeCompare(b.artikel));
+  const ws2 = XLSX.utils.aoa_to_sheet([
+    ['Artikel Number', 'Size (EUR)', 'Product Name', 'Total Quantity'],
+    ...totals.map(t => [t.artikel, t.size, t.product, t.qty])
+  ]);
+  ws2['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 16 }];
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+  XLSX.utils.book_append_sheet(wb, ws1, 'All Pallets');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Totals');
   XLSX.writeFile(wb, 'inventory_' + ds() + '.xlsx');
   toast('Excel saved');
 }
